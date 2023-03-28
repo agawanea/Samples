@@ -1,0 +1,94 @@
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  SAMFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.9
+      PackageType: Zip
+      Handler: index.lambda_handler
+      InlineCode: |
+        import json, boto3
+        ec2 = boto3.client('ec2')
+
+        def lambda_handler(event, context):
+            regions = [region['RegionName'] for region in ec2.describe_regions()['Regions']]
+            # print (regions)
+            # Looping through the regions
+            failed = []
+            successful =[]
+            for region in regions:
+                function_list = []
+                alias_list = []
+                lambda_client = boto3.client('lambda', region_name=region)
+                
+                allfunctions = lambda_client.list_functions(FunctionVersion='ALL')
+                #print(allfunctions)
+
+                if len(allfunctions['Functions']) != 0:
+                    for function in allfunctions['Functions']:
+                        function_list.append(function['FunctionName'])
+                    if 'NextMarker' in allfunctions:
+                        allfunctions1 = lambda_client.list_functions(Marker=allfunctions['NextMarker'])
+                        for function in allfunctions1['Functions']:
+                            function_list.append(function['FunctionName'])
+                        
+
+                    #print(function_list, region, len(function_list))
+                    for func in function_list:
+                        
+                        try:
+                            aliasArn = lambda_client.list_aliases(FunctionName=func)
+                            for eachalias in aliasArn['Aliases']:
+                                alias_list.append(eachalias['AliasArn'])
+                            
+                        except lambda_client.exceptions.ResourceNotFoundException:
+                            pass
+                    
+                    list = function_list+alias_list
+                    for eachfunction in list:
+                        try:
+                            res = lambda_client.get_policy(FunctionName=eachfunction)
+                            policy = json.loads(res['Policy'])
+                            for i in policy['Statement']:
+                                if i['Principal'] == "*":
+                                    try:
+                                        lambda_client.remove_permission(FunctionName=eachfunction,StatementId=i['Sid'])
+                                        print (f"Deletion of permission statement '{i['Sid']}' in function {eachfunction} is successful.")
+                                        successful.append(eachfunction)
+                                    except Exception as e:
+                                        print (f"Deletion of permission statement '{i['Sid']}' in function {eachfunction} failed due to error {e}.")
+                                        failed.append(eachfunction)
+                        except lambda_client.exceptions.ResourceNotFoundException:
+                            pass
+                        
+                            
+            return {
+                "Successfully remediated": successful,
+                "Failed to remediate": failed
+            }
+      Timeout: 60
+      Policies:
+        - AWSLambdaExecute
+        - Version: '2012-10-17' 
+          Statement:
+            - Effect: Allow
+              Action:
+                - lambda:ListFunctions
+                - ec2:DescribeRegions
+                - lambda:RemovePermission
+                - lambda:ListAliases
+                - lambda:GetPolicy
+              Resource: '*'
+      Events:
+        ScheduleEvent:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: "rate(1 hour)"
+
+
+
+Outputs:
+  LambdaFuntionName:
+    Description: The name of Lambda function
+    Value: !Ref SAMFunction
