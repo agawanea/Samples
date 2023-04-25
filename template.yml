@@ -27,7 +27,7 @@ Resources:
 
                 if len(allfunctions['Functions']) != 0:
                     for function in allfunctions['Functions']:
-                        function_list.append(function['FunctionName'])
+                        function_list.append(function['FunctionArn'])
                     if 'NextMarker' in allfunctions:
                         allfunctions1 = lambda_client.list_functions(Marker=allfunctions['NextMarker'])
                         for function in allfunctions1['Functions']:
