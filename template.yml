@@ -22,7 +22,7 @@ Resources:
                 alias_list = []
                 lambda_client = boto3.client('lambda', region_name=region)
                 
-                allfunctions = lambda_client.list_functions(FunctionVersion='ALL')
+                allfunctions = lambda_client.list_functions()
                 #print(allfunctions)
 
                 if len(allfunctions['Functions']) != 0:
@@ -31,7 +31,7 @@ Resources:
                     if 'NextMarker' in allfunctions:
                         allfunctions1 = lambda_client.list_functions(Marker=allfunctions['NextMarker'])
                         for function in allfunctions1['Functions']:
-                            function_list.append(function['FunctionName'])
+                            function_list.append(function['FunctionArn'])
                         
 
                     #print(function_list, region, len(function_list))
